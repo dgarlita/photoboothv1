@@ -1178,7 +1178,7 @@
     <div class="header-inner">
       <div class="brand-logo" onclick="App.navigate('booth')">
         <div class="brand-badge-sq" id="navbar-logo-box">
-          <img src="logorafqa.jpeg" alt="Rafqa Production" onerror="this.style.display='none'; this.parentElement.textContent='RP';" />
+          <img src="assets/logo.jpg" alt="Rafqa Production" onerror="this.style.display='none'; this.parentElement.textContent='RP';" />
         </div>
         <span style="font-family: var(--font-grotesk); font-weight: 800; font-size: 1.15rem;">
           Rafqa <span style="color: var(--tangerine-600);">Production</span>
@@ -2891,6 +2891,9 @@
      * 8. UPLOAD TO GOOGLE DRIVE (VIA GOOGLE APPS SCRIPT) & GALLERY ARCHIVE MODULE
      */
     const UploadModule = (() => {
+      let isUploading = false;
+      let lastUploadedSignature = '';
+
       function isGasConfigured() {
         return typeof GAS_WEB_APP_URL === 'string' &&
           GAS_WEB_APP_URL.startsWith('https://script.google.com/') &&
@@ -2913,6 +2916,8 @@
       }
 
       async function uploadFinalPhoto() {
+        if (isUploading) return;
+
         if (EventConfigModule.getEventLifecycleState().status !== 'LIVE_ACTIVE') {
           return App.toast('Sesi kamera 24 jam telah berakhir.', 'error');
         }
@@ -2923,17 +2928,25 @@
         const guestName = document.getElementById('preview-guest-name').value.trim() || 'Tamu Undangan';
         const guestWish = document.getElementById('preview-guest-wish').value.trim();
 
+        const localHighResBase64 = canvas.toDataURL('image/jpeg', 0.92);
+        const currentSignature = `${config.eventId}_${guestName}_${localHighResBase64.slice(0, 120)}_${localHighResBase64.length}`;
+
+        // Cegah pengiriman ulang foto yang persis sama jika tombol terklik dua kali
+        if (lastUploadedSignature === currentSignature) {
+          App.navigate('gallery');
+          return;
+        }
+
+        isUploading = true;
+        lastUploadedSignature = currentSignature;
         localStorage.setItem('rafqa_guest_name', guestName);
         btn.disabled = true;
         btn.innerHTML = `<i class="ph-bold ph-spinner"></i> Menyimpan ke Google Drive...`;
 
-        const localHighResBase64 = canvas.toDataURL('image/jpeg', 0.92);
         const uploadBase64 = createCompressedUploadBase64(canvas);
         const filename = `${config.eventId}_${Date.now()}.jpg`;
         let drivePhotoUrl = localHighResBase64;
         let driveFileId = 'ph_' + Date.now();
-        let cloudSynced = false;
-        let errorReason = '';
 
         try {
           if (isGasConfigured()) {
@@ -2961,15 +2974,12 @@
             try {
               resJson = JSON.parse(rawText);
             } catch (parseErr) {
-              throw new Error('Respon Apps Script bukan JSON. Pastikan Who has access = Anyone dan New Deployment sudah dibuat.');
+              throw new Error('Respon Apps Script bukan JSON.');
             }
 
             if (resJson && resJson.status === 'success') {
-              cloudSynced = true;
               if (resJson.fileUrl) drivePhotoUrl = resJson.fileUrl;
               if (resJson.fileId) driveFileId = resJson.fileId;
-            } else {
-              errorReason = (resJson && resJson.message) ? resJson.message : 'Gagal menyimpan ke Google Drive';
             }
           }
 
@@ -2998,6 +3008,7 @@
           });
           App.navigate('gallery');
         } finally {
+          isUploading = false;
           btn.disabled = false;
           btn.innerHTML = `<i class="ph-bold ph-cloud-arrow-up"></i> Simpan ke Album & Galeri`;
         }
@@ -3020,8 +3031,12 @@
       function saveLocalPhoto(eventId, photoObj) {
         const key = getStorageKey(eventId);
         const existing = JSON.parse(localStorage.getItem(key) || '[]');
-        existing.unshift(photoObj);
-        localStorage.setItem(key, JSON.stringify(existing.slice(0, 60)));
+        // Hindari duplikasi berdasarkan id atau nama file yang sama
+        const filtered = existing.filter(item =>
+          item.id !== photoObj.id && (!photoObj.name || item.name !== photoObj.name)
+        );
+        filtered.unshift(photoObj);
+        localStorage.setItem(key, JSON.stringify(filtered.slice(0, 60)));
       }
 
       async function syncFromGoogleDrive(eventId) {
@@ -3035,14 +3050,30 @@
           if (data && Array.isArray(data.photos)) {
             const localPhotos = getPhotos();
             const mergedMap = new Map();
-            data.photos.forEach(p => mergedMap.set(p.id, p));
+            const seenNames = new Set();
+
+            // Prioritaskan data dari Google Drive dan catat nama file yang sudah ada
+            data.photos.forEach(p => {
+              mergedMap.set(p.id, p);
+              if (p.name) seenNames.add(p.name);
+            });
+
+            // Cocokkan data lokal agar tidak muncul ganda jika id lokal (ph_*) berbeda dengan fileId Drive
             localPhotos.forEach(lp => {
-              if (!mergedMap.has(lp.id)) {
+              const matchedCloud = data.photos.find(dp =>
+                dp.id === lp.id || (lp.name && dp.name === lp.name)
+              );
+
+              if (matchedCloud) {
+                if (lp.localPreviewUrl) {
+                  mergedMap.get(matchedCloud.id).localPreviewUrl = lp.localPreviewUrl;
+                }
+              } else if (!lp.name || !seenNames.has(lp.name)) {
                 mergedMap.set(lp.id, lp);
-              } else if (lp.localPreviewUrl) {
-                mergedMap.get(lp.id).localPreviewUrl = lp.localPreviewUrl;
+                if (lp.name) seenNames.add(lp.name);
               }
             });
+
             const merged = Array.from(mergedMap.values());
             localStorage.setItem(getStorageKey(eventId), JSON.stringify(merged));
             return merged;
