@@ -1609,7 +1609,7 @@
       const DEFAULT_CONFIG = {
         eventId: "RP-2026",
         eventSlug: "rafqa-production-session",
-        eventName: "Rafqa Production Photobooth",
+        eventName: "Wedding Dea & Dona",
         eventSubtitle: "Cirebon • #CaptureYourWay",
         eventDate: todayIso,
         driveFolderId: DEFAULT_DRIVE_FOLDER_ID,
@@ -1643,8 +1643,8 @@
         if (saved) {
           try { currentConfig = { ...currentConfig, ...JSON.parse(saved) }; } catch (e) {}
         }
-        if (currentConfig.eventName === "Rafqa Production Pop-Up") {
-          currentConfig.eventName = "Rafqa Production Photobooth";
+        if (currentConfig.eventName === "Wedding Dea & Dona") {
+          currentConfig.eventName = "Wedding Dea & Dona";
         }
         if (!currentConfig.driveFolderId) currentConfig.driveFolderId = DEFAULT_DRIVE_FOLDER_ID;
         if (!currentConfig.galleryHeaderBg) currentConfig.galleryHeaderBg = DEFAULT_GALLERY_BG_URL;
@@ -1691,7 +1691,7 @@
       }
 
       function liveUpdate() {
-        currentConfig.eventName = document.getElementById('cfg-event-name').value || "Rafqa Production Photobooth";
+        currentConfig.eventName = document.getElementById('cfg-event-name').value || "Wedding Dea & Dona";
         currentConfig.eventSlug = currentConfig.eventName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'rafqa-production';
         currentConfig.eventId = `RP-${currentConfig.eventSlug.toUpperCase()}`;
         currentConfig.eventSubtitle = document.getElementById('cfg-event-subtitle').value;
