@@ -1604,14 +1604,14 @@
      * 1. EVENT CONFIG & 24-HOUR ACCESS GATE MODULE
      */
     const EventConfigModule = (() => {
-      const todayIso = new Date().toISOString().split('T')[0];
+      const FIXED_EVENT_DATE = "2026-11-21";
 
       const DEFAULT_CONFIG = {
         eventId: "RP-2026",
         eventSlug: "rafqa-production-session",
         eventName: "Wedding Dea & Dona",
         eventSubtitle: "Cirebon • #CaptureYourWay",
-        eventDate: todayIso,
+        eventDate: FIXED_EVENT_DATE,
         driveFolderId: DEFAULT_DRIVE_FOLDER_ID,
         galleryHeaderBg: DEFAULT_GALLERY_BG_URL,
         pinCode: "",
