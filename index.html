@@ -890,31 +890,6 @@
       border-bottom: 2px solid var(--obsidian-900);
     }
 
-    .card-delete-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      background: rgba(18, 15, 13, 0.85);
-      color: #FCA5A5;
-      border: 1.5px solid var(--obsidian-950);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1rem;
-      cursor: pointer;
-      z-index: 5;
-      transition: all 0.16s ease;
-    }
-
-    .card-delete-btn:hover {
-      background: var(--danger);
-      color: #FFFFFF;
-      transform: scale(1.08);
-    }
-
     .gallery-card-meta {
       padding: 10px 12px;
       font-size: 0.78rem;
@@ -1178,7 +1153,7 @@
     <div class="header-inner">
       <div class="brand-logo" onclick="App.navigate('booth')">
         <div class="brand-badge-sq" id="navbar-logo-box">
-          <img src="assets/logo.jpg" alt="Rafqa Production" onerror="this.style.display='none'; this.parentElement.textContent='RP';" />
+          <img src="logorafqa.jpeg" alt="Rafqa Production" onerror="this.style.display='none'; this.parentElement.textContent='RP';" />
         </div>
         <span style="font-family: var(--font-grotesk); font-weight: 800; font-size: 1.15rem;">
           Rafqa <span style="color: var(--tangerine-600);">Production</span>
@@ -1929,7 +1904,7 @@
         { id: 'warm_film', name: 'Warm Film', css: 'sepia(0.22) saturate(1.22) contrast(1.06) brightness(1.03)', swatch: 'linear-gradient(135deg, #FDBA74, #8C6239)' },
         { id: 'golden', name: 'Golden Hour', css: 'contrast(1.1) saturate(1.3) hue-rotate(-7deg) brightness(1.05)', swatch: 'linear-gradient(135deg, #FB923C, #54351A)' },
         { id: 'bw', name: 'Noir B&W', css: 'grayscale(1) contrast(1.25)', swatch: 'linear-gradient(135deg, #FFFFFF, #120F0D)' },
-        { id: 'fisheye', name: 'Fisheye 8mm', css: 'contrast(1.1) saturate(1.14)', fisheye: true, swatch: 'radial-gradient(circle, #FAF6EE 25%, #120F0D 92%)' }
+        { id: 'fisheye', name: 'Fisheye 2mm', css: 'contrast(1.12) saturate(1.16)', fisheye: true, swatch: 'radial-gradient(circle, #FAF6EE 25%, #120F0D 92%)' }
       ];
 
       let activeFilterId = 'original';
@@ -1998,15 +1973,31 @@
         }
 
         if (filterObj.timestamp) {
-          ctx.save();
-          const fontSize = Math.max(15, Math.floor(w * 0.034));
-          ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
-          ctx.fillStyle = '#FB923C';
-          const now = new Date();
-          const stamp = `'${String(now.getFullYear()).slice(-2)} ${String(now.getMonth()+1).padStart(2,'0')} ${String(now.getDate()).padStart(2,'0')}`;
-          ctx.fillText(stamp, w - (w * 0.31), h - (h * 0.055));
-          ctx.restore();
+          drawDisposableTimestamp(ctx, w, h);
         }
+      }
+
+      function getDisposableTimestampText() {
+        const now = new Date();
+        return `'${String(now.getFullYear()).slice(-2)} ${String(now.getMonth() + 1).padStart(2, '0')} ${String(now.getDate()).padStart(2, '0')}`;
+      }
+
+      function drawDisposableTimestamp(ctx, boxW, boxH, offsetX = 0, offsetY = 0) {
+        ctx.save();
+        const fontSize = Math.max(11, Math.min(22, Math.floor(Math.min(boxW, boxH) * 0.042)));
+        ctx.font = `700 ${fontSize}px "JetBrains Mono", monospace`;
+        ctx.fillStyle = '#FB923C';
+        ctx.shadowColor = 'rgba(18, 15, 13, 0.92)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+
+        const padX = Math.max(10, boxW * 0.055);
+        const padY = Math.max(8, boxH * 0.055);
+        ctx.fillText(getDisposableTimestampText(), offsetX + boxW - padX, offsetY + boxH - padY);
+        ctx.restore();
       }
 
       function applyFisheyeConvexDistortion(ctx, w, h) {
@@ -2015,35 +2006,44 @@
         const src = srcData.data;
         const dst = dstData.data;
         const cx = w / 2, cy = h / 2;
-        const lensRadius = Math.min(w, h) * 0.56;
+        const normR = Math.min(w, h) * 0.52;
+        // Karakter lensa Fisheye 2mm ultra-wide cembung yang tegas namun tetap proporsional
+        const k1 = 0.62;
+        const k2 = 0.24;
+        const zoom = 1.18;
 
         for (let y = 0; y < h; y++) {
+          const dy = (y - cy) / normR;
+          const dy2 = dy * dy;
           for (let x = 0; x < w; x++) {
-            const dx = (x - cx) / lensRadius;
-            const dy = (y - cy) / lensRadius;
-            const r = Math.sqrt(dx * dx + dy * dy);
+            const dx = (x - cx) / normR;
+            const r2 = dx * dx + dy2;
+            const barrel = (1 + k1 * r2 + k2 * r2 * r2) / zoom;
+
+            const srcX = Math.round(cx + dx * barrel * normR);
+            const srcY = Math.round(cy + dy * barrel * normR);
             const dstIdx = (y * w + x) * 4;
-            if (r < 1.0) {
-              const rSrc = Math.pow(r, 1.65);
-              const scale = r === 0 ? 0 : rSrc / r;
-              const srcX = Math.round(cx + dx * scale * lensRadius);
-              const srcY = Math.round(cy + dy * scale * lensRadius);
-              if (srcX >= 0 && srcX < w && srcY >= 0 && srcY < h) {
-                const srcIdx = (srcY * w + srcX) * 4;
-                dst[dstIdx] = src[srcIdx];
-                dst[dstIdx + 1] = src[srcIdx + 1];
-                dst[dstIdx + 2] = src[srcIdx + 2];
-                dst[dstIdx + 3] = 255;
-              }
+
+            if (srcX >= 0 && srcX < w && srcY >= 0 && srcY < h) {
+              const srcIdx = (srcY * w + srcX) * 4;
+              // Sedikit vignette lembut khas pinggiran lensa 2mm
+              const edgeVig = Math.max(0.72, 1 - Math.max(0, r2 - 0.85) * 0.14);
+              dst[dstIdx] = src[srcIdx] * edgeVig;
+              dst[dstIdx + 1] = src[srcIdx + 1] * edgeVig;
+              dst[dstIdx + 2] = src[srcIdx + 2] * edgeVig;
+              dst[dstIdx + 3] = 255;
             } else {
-              dst[dstIdx] = 26; dst[dstIdx + 1] = 22; dst[dstIdx + 2] = 20; dst[dstIdx + 3] = 255;
+              dst[dstIdx] = 18;
+              dst[dstIdx + 1] = 15;
+              dst[dstIdx + 2] = 13;
+              dst[dstIdx + 3] = 255;
             }
           }
         }
         ctx.putImageData(dstData, 0, 0);
       }
 
-      return { init, select, getActive, getById, applyFilterToCanvas };
+      return { init, select, getActive, getById, applyFilterToCanvas, drawDisposableTimestamp };
     })();
 
 
@@ -2356,9 +2356,17 @@
         filteredCanvas.height = rawCanvas.height;
         FilterModule.applyFilterToCanvas(rawCanvas, filteredCanvas, activeFilter, false);
 
+        // Simpan juga versi bersih tanpa stempel tanggal agar bisa digambar ulang secara adaptif sesuai rasio frame
+        const cleanFilterObj = activeFilter.timestamp ? { ...activeFilter, timestamp: false } : activeFilter;
+        const frameReadyCanvas = document.createElement('canvas');
+        frameReadyCanvas.width = rawCanvas.width;
+        frameReadyCanvas.height = rawCanvas.height;
+        FilterModule.applyFilterToCanvas(rawCanvas, frameReadyCanvas, cleanFilterObj, false);
+
         slots[slotIdx] = {
           rawDataUrl: rawCanvas.toDataURL('image/jpeg', 0.92),
           filteredDataUrl: filteredCanvas.toDataURL('image/jpeg', 0.92),
+          frameReadyDataUrl: frameReadyCanvas.toDataURL('image/jpeg', 0.92),
           filterId: activeFilter.id
         };
         renderSlotsUI();
@@ -2391,9 +2399,16 @@
         filteredCanvas.height = 600;
         FilterModule.applyFilterToCanvas(demoCanvas, filteredCanvas, activeFilter, false);
 
+        const cleanFilterObj = activeFilter.timestamp ? { ...activeFilter, timestamp: false } : activeFilter;
+        const frameReadyCanvas = document.createElement('canvas');
+        frameReadyCanvas.width = 800;
+        frameReadyCanvas.height = 600;
+        FilterModule.applyFilterToCanvas(demoCanvas, frameReadyCanvas, cleanFilterObj, false);
+
         slots[slotIdx] = {
           rawDataUrl: demoCanvas.toDataURL('image/jpeg', 0.92),
           filteredDataUrl: filteredCanvas.toDataURL('image/jpeg', 0.92),
+          frameReadyDataUrl: frameReadyCanvas.toDataURL('image/jpeg', 0.92),
           filterId: activeFilter.id
         };
         renderSlotsUI();
@@ -2567,8 +2582,15 @@
             ctx.fillRect(x, y, cellW, cellH);
 
             if (!isSimulation && slotDataArray[i]) {
-              const img = await loadImage(slotDataArray[i].filteredDataUrl);
+              const slotFilter = FilterModule.getById(slotDataArray[i].filterId || FilterModule.getActive().id);
+              const imgSrc = (slotFilter.timestamp && slotDataArray[i].frameReadyDataUrl)
+                ? slotDataArray[i].frameReadyDataUrl
+                : slotDataArray[i].filteredDataUrl;
+              const img = await loadImage(imgSrc);
               if (img) drawImageCover(ctx, img, x, y, cellW, cellH);
+              if (slotFilter.timestamp) {
+                FilterModule.drawDisposableTimestamp(ctx, cellW, cellH, x, y);
+              }
             } else {
               ctx.fillStyle = '#54351A';
               ctx.font = 'bold 26px sans-serif';
@@ -2680,8 +2702,15 @@
           ctx.clip();
 
           if (!isSimulation && slotDataArray[i]) {
-            const img = await loadImage(slotDataArray[i].filteredDataUrl);
+            const slotFilter = FilterModule.getById(slotDataArray[i].filterId || FilterModule.getActive().id);
+            const imgSrc = (slotFilter.timestamp && slotDataArray[i].frameReadyDataUrl)
+              ? slotDataArray[i].frameReadyDataUrl
+              : slotDataArray[i].filteredDataUrl;
+            const img = await loadImage(imgSrc);
             if (img) drawImageCover(ctx, img, x, y, cellW, cellH);
+            if (slotFilter.timestamp) {
+              FilterModule.drawDisposableTimestamp(ctx, cellW, cellH, x, y);
+            }
           } else {
             ctx.fillStyle = frameTemplate.accent;
             ctx.font = 'bold 26px sans-serif';
@@ -2853,16 +2882,25 @@
       async function changeFilter(newFilterId) {
         FilterModule.select(newFilterId);
         const filterObj = FilterModule.getById(newFilterId);
+        const cleanFilterObj = filterObj.timestamp ? { ...filterObj, timestamp: false } : filterObj;
         const slots = CaptureModule.getSlots();
         for (let i = 0; i < slots.length; i++) {
           if (!slots[i]) continue;
           const img = new Image();
           await new Promise(res => { img.onload = res; img.src = slots[i].rawDataUrl; });
+
           const tempCanvas = document.createElement('canvas');
           tempCanvas.width = img.width;
           tempCanvas.height = img.height;
           FilterModule.applyFilterToCanvas(img, tempCanvas, filterObj, false);
           slots[i].filteredDataUrl = tempCanvas.toDataURL('image/jpeg', 0.92);
+
+          const cleanCanvas = document.createElement('canvas');
+          cleanCanvas.width = img.width;
+          cleanCanvas.height = img.height;
+          FilterModule.applyFilterToCanvas(img, cleanCanvas, cleanFilterObj, false);
+          slots[i].frameReadyDataUrl = cleanCanvas.toDataURL('image/jpeg', 0.92);
+          slots[i].filterId = newFilterId;
         }
         await renderFinal();
       }
@@ -2917,7 +2955,6 @@
 
       async function uploadFinalPhoto() {
         if (isUploading) return;
-
         if (EventConfigModule.getEventLifecycleState().status !== 'LIVE_ACTIVE') {
           return App.toast('Sesi kamera 24 jam telah berakhir.', 'error');
         }
@@ -2929,9 +2966,7 @@
         const guestWish = document.getElementById('preview-guest-wish').value.trim();
 
         const localHighResBase64 = canvas.toDataURL('image/jpeg', 0.92);
-        const currentSignature = `${config.eventId}_${guestName}_${localHighResBase64.slice(0, 120)}_${localHighResBase64.length}`;
-
-        // Cegah pengiriman ulang foto yang persis sama jika tombol terklik dua kali
+        const currentSignature = `${config.eventId}_${guestName}_${localHighResBase64.length}_${localHighResBase64.slice(-64)}`;
         if (lastUploadedSignature === currentSignature) {
           App.navigate('gallery');
           return;
@@ -2939,6 +2974,7 @@
 
         isUploading = true;
         lastUploadedSignature = currentSignature;
+
         localStorage.setItem('rafqa_guest_name', guestName);
         btn.disabled = true;
         btn.innerHTML = `<i class="ph-bold ph-spinner"></i> Menyimpan ke Google Drive...`;
@@ -3021,9 +3057,10 @@
     const GalleryModule = (() => {
       let currentLightboxPhotoId = null;
       let pendingDeletePhotoId = null;
-      let slideshowInterval = null;
+      let slideshowTimer = null;
+      let slideshowProgressTimer = null;
       let isSlideshowPlaying = false;
-      const SLIDESHOW_DELAY_MS = 4000;
+      const SLIDESHOW_DURATION_MS = 4000;
 
       function getStorageKey(eventId) { return `rafqa_gallery_${eventId}`; }
       function getLikedStorageKey(eventId) { return `rafqa_liked_ids_${eventId}`; }
@@ -3031,9 +3068,9 @@
       function saveLocalPhoto(eventId, photoObj) {
         const key = getStorageKey(eventId);
         const existing = JSON.parse(localStorage.getItem(key) || '[]');
-        // Hindari duplikasi berdasarkan id atau nama file yang sama
         const filtered = existing.filter(item =>
-          item.id !== photoObj.id && (!photoObj.name || item.name !== photoObj.name)
+          item.id !== photoObj.id &&
+          !(photoObj.name && item.name === photoObj.name)
         );
         filtered.unshift(photoObj);
         localStorage.setItem(key, JSON.stringify(filtered.slice(0, 60)));
@@ -3044,39 +3081,34 @@
         try {
           const config = EventConfigModule.get();
           const folderId = config.driveFolderId || DEFAULT_DRIVE_FOLDER_ID;
-          const url = `${GAS_WEB_APP_URL}?action=list&eventId=${encodeURIComponent(eventId)}&folderId=${encodeURIComponent(folderId)}`;
+          const url = `${GAS_WEB_APP_URL}?action=list&eventId=${encodeURIComponent(eventId)}&folderId=${encodeURIComponent(folderId)}&_t=${Date.now()}`;
           const res = await fetch(url, { redirect: 'follow' });
           const data = await res.json();
           if (data && Array.isArray(data.photos)) {
             const localPhotos = getPhotos();
-            const mergedMap = new Map();
-            const seenNames = new Set();
-
-            // Prioritaskan data dari Google Drive dan catat nama file yang sudah ada
-            data.photos.forEach(p => {
-              mergedMap.set(p.id, p);
-              if (p.name) seenNames.add(p.name);
-            });
-
-            // Cocokkan data lokal agar tidak muncul ganda jika id lokal (ph_*) berbeda dengan fileId Drive
+            const localById = new Map();
+            const localByName = new Map();
             localPhotos.forEach(lp => {
-              const matchedCloud = data.photos.find(dp =>
-                dp.id === lp.id || (lp.name && dp.name === lp.name)
-              );
-
-              if (matchedCloud) {
-                if (lp.localPreviewUrl) {
-                  mergedMap.get(matchedCloud.id).localPreviewUrl = lp.localPreviewUrl;
-                }
-              } else if (!lp.name || !seenNames.has(lp.name)) {
-                mergedMap.set(lp.id, lp);
-                if (lp.name) seenNames.add(lp.name);
-              }
+              if (lp.id) localById.set(lp.id, lp);
+              if (lp.name) localByName.set(lp.name, lp);
             });
 
-            const merged = Array.from(mergedMap.values());
-            localStorage.setItem(getStorageKey(eventId), JSON.stringify(merged));
-            return merged;
+            // Sumber utama adalah daftar file aktif di Google Drive
+            const syncedPhotos = data.photos.map(dp => {
+              const matchedLocal = localById.get(dp.id) || (dp.name ? localByName.get(dp.name) : null);
+              if (matchedLocal) {
+                return {
+                  ...dp,
+                  guestName: dp.guestName || matchedLocal.guestName,
+                  guestWish: dp.guestWish || matchedLocal.guestWish,
+                  localPreviewUrl: matchedLocal.localPreviewUrl || dp.localPreviewUrl
+                };
+              }
+              return dp;
+            });
+
+            localStorage.setItem(getStorageKey(eventId), JSON.stringify(syncedPhotos));
+            return syncedPhotos;
           }
         } catch (e) {}
         return getPhotos();
@@ -3129,24 +3161,21 @@
         }
       }
 
-      /* ======================================================================
-         FITUR HAPUS FOTO (DARI GALERI LOKAL & GOOGLE DRIVE)
-         ====================================================================== */
       function promptDelete(photoId, event) {
         if (event) event.stopPropagation();
+        pauseSlideshow();
         const photoObj = getPhotos().find(p => p.id === photoId);
         if (!photoObj) return;
-
-        pauseSlideshow();
         pendingDeletePhotoId = photoId;
-        const guestLabel = photoObj.guestName || 'Tamu Undangan';
-        document.getElementById('delete-confirm-desc').innerHTML =
-          `Apakah Anda yakin ingin menghapus foto milik <strong>${guestLabel}</strong> dari album galeri?`;
+        const descEl = document.getElementById('delete-confirm-desc');
+        if (descEl) {
+          descEl.textContent = `Foto milik "${photoObj.guestName || 'Tamu Undangan'}" akan dihapus permanen dari galeri dan Google Drive.`;
+        }
         document.getElementById('delete-confirm-modal').classList.add('active');
       }
 
-      function closeDeleteConfirm(event) {
-        if (!event || event.target.id === 'delete-confirm-modal') {
+      function closeDeleteConfirm(e) {
+        if (!e || e.target.id === 'delete-confirm-modal') {
           pendingDeletePhotoId = null;
           document.getElementById('delete-confirm-modal').classList.remove('active');
         }
@@ -3155,21 +3184,24 @@
       async function executeDelete() {
         if (!pendingDeletePhotoId) return;
         const targetId = pendingDeletePhotoId;
-        const execBtn = document.getElementById('btn-confirm-delete-exec');
-        execBtn.disabled = true;
-        execBtn.innerHTML = `<i class="ph-bold ph-spinner"></i> Menghapus...`;
-
         const config = EventConfigModule.get();
         const photos = getPhotos();
-        const deletedIndex = photos.findIndex(p => p.id === targetId);
+        const targetIndex = photos.findIndex(p => p.id === targetId);
+        const targetPhoto = targetIndex !== -1 ? photos[targetIndex] : null;
         const remainingPhotos = photos.filter(p => p.id !== targetId);
+
+        const execBtn = document.getElementById('btn-confirm-delete-exec');
+        if (execBtn) {
+          execBtn.disabled = true;
+          execBtn.innerHTML = `<i class="ph-bold ph-spinner"></i> Menghapus...`;
+        }
 
         localStorage.setItem(getStorageKey(config.eventId), JSON.stringify(remainingPhotos));
 
-        let likedIds = getLikedIds().filter(id => id !== targetId);
+        const likedIds = getLikedIds().filter(id => id !== targetId);
         localStorage.setItem(getLikedStorageKey(config.eventId), JSON.stringify(likedIds));
 
-        if (UploadModule.isGasConfigured() && !String(targetId).startsWith('ph_')) {
+        if (UploadModule.isGasConfigured()) {
           try {
             await fetch(GAS_WEB_APP_URL, {
               method: 'POST',
@@ -3178,28 +3210,32 @@
               body: JSON.stringify({
                 action: 'delete',
                 fileId: targetId,
+                filename: targetPhoto ? targetPhoto.name : '',
+                eventId: config.eventId,
                 folderId: config.driveFolderId || DEFAULT_DRIVE_FOLDER_ID
               })
             });
           } catch (e) {}
         }
 
-        execBtn.disabled = false;
-        execBtn.innerHTML = `<i class="ph-bold ph-trash"></i> Hapus`;
-        closeDeleteConfirm();
-        App.toast('Foto berhasil dihapus dari galeri.', 'success');
+        if (execBtn) {
+          execBtn.disabled = false;
+          execBtn.innerHTML = `<i class="ph-bold ph-trash"></i> Hapus`;
+        }
 
-        // Jika lightbox sedang terbuka, pindah ke foto berikutnya atau tutup jika habis
+        closeDeleteConfirm();
+        App.toast('Foto berhasil dihapus dari galeri & Google Drive.', 'success');
+
         if (currentLightboxPhotoId === targetId) {
           if (remainingPhotos.length === 0) {
             closeLightbox();
           } else {
-            const nextIdx = Math.min(deletedIndex, remainingPhotos.length - 1);
+            const nextIdx = Math.min(targetIndex, remainingPhotos.length - 1);
             openLightbox(remainingPhotos[nextIdx].id, false);
           }
         }
 
-        await refresh(false);
+        await refresh();
       }
 
       function updateLightboxLikeUI(photoObj) {
@@ -3211,13 +3247,13 @@
         btn.innerHTML = `<i class="${isLiked ? 'ph-fill' : 'ph-bold'} ph-heart"></i> <span id="lightbox-like-count">${photoObj.likes || 0}</span>`;
       }
 
-      async function refresh(shouldSyncCloud = true) {
+      async function refresh() {
         EventConfigModule.evaluate24HourStatus();
         const container = document.getElementById('gallery-content');
         const config = EventConfigModule.get();
         const isLive = EventConfigModule.getEventLifecycleState().status === 'LIVE_ACTIVE';
 
-        let photos = shouldSyncCloud ? await syncFromGoogleDrive(config.eventId) : getPhotos();
+        let photos = await syncFromGoogleDrive(config.eventId);
         const likedIds = getLikedIds();
 
         const slideshowBtn = document.getElementById('btn-start-slideshow');
@@ -3248,9 +3284,6 @@
           card.className = 'gallery-card';
           card.onclick = () => openLightbox(p.id, false);
           card.innerHTML = `
-            <button type="button" class="card-delete-btn" onclick="GalleryModule.promptDelete('${p.id}', event)" title="Hapus foto ini">
-              <i class="ph-bold ph-trash"></i>
-            </button>
             <img src="${imgSrc}" alt="${p.guestName || 'Foto Tamu'}" loading="lazy" />
             <div class="gallery-card-meta">
               <div style="min-width: 0; flex: 1;">
@@ -3258,7 +3291,7 @@
                 ${p.guestWish ? `<div style="font-size: 0.72rem; color: var(--cocoa-800); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">"${p.guestWish}"</div>` : ''}
                 <div style="font-family: var(--font-mono); font-size: 0.66rem; color: var(--tangerine-600); margin-top: 4px;">${p.timestamp || ''}</div>
               </div>
-              <button type="button" class="like-btn ${isLiked ? 'liked' : ''}" onclick="GalleryModule.toggleLike('${p.id}', event)" title="Sukai foto ini">
+              <button class="like-btn ${isLiked ? 'liked' : ''}" onclick="GalleryModule.toggleLike('${p.id}', event)" title="Sukai foto ini">
                 <i class="${isLiked ? 'ph-fill' : 'ph-bold'} ph-heart"></i>
                 <span>${likesCount}</span>
               </button>
@@ -3299,31 +3332,20 @@
         App.toast('Arsip ZIP berhasil diunduh!', 'success');
       }
 
-      /* ======================================================================
-         FITUR LIGHTBOX & SLIDESHOW DENGAN NEXT / PREV / PLAY-PAUSE
-         ====================================================================== */
-      function startSlideshow() {
+      function openLightbox(photoId, autoStartSlideshow = false) {
         const photos = getPhotos();
-        if (photos.length === 0) {
-          return App.toast('Belum ada foto untuk ditampilkan di slideshow.', 'error');
-        }
-        openLightbox(photos[0].id, true);
-      }
+        const idx = photos.findIndex(p => p.id === photoId);
+        if (idx === -1) return;
 
-      function openLightbox(photoId, autoPlay = false) {
-        const photos = getPhotos();
-        const currentIndex = photos.findIndex(p => p.id === photoId);
-        if (currentIndex === -1) return;
-
-        const photoObj = photos[currentIndex];
+        const photoObj = photos[idx];
         currentLightboxPhotoId = photoId;
-
         const modal = document.getElementById('lightbox-modal');
         const displayUrl = photoObj.localPreviewUrl || photoObj.url;
+
         document.getElementById('lightbox-img').src = displayUrl;
-        document.getElementById('lightbox-counter').textContent = `${currentIndex + 1} / ${photos.length}`;
+        document.getElementById('lightbox-counter').textContent = `${idx + 1} / ${photos.length}`;
         document.getElementById('lightbox-guest-name').textContent = photoObj.guestName || 'Tamu Undangan';
-        document.getElementById('lightbox-guest-wish').textContent = photoObj.guestWish ? `"${photoObj.guestWish}"` : (photoObj.timestamp || '');
+        document.getElementById('lightbox-guest-wish').textContent = photoObj.guestWish ? `"${photoObj.guestWish}"` : '';
 
         const hasMultiple = photos.length > 1;
         document.getElementById('lightbox-prev-btn').style.display = hasMultiple ? 'flex' : 'none';
@@ -3342,76 +3364,68 @@
 
         modal.classList.add('active');
 
-        if (autoPlay) {
+        if (autoStartSlideshow) {
           playSlideshow();
         } else if (isSlideshowPlaying) {
-          restartSlideshowProgressBar();
+          resetSlideshowProgress();
         }
       }
 
-      function nextPhoto(event) {
-        if (event) event.stopPropagation();
+      function nextPhoto(e) {
+        if (e) e.stopPropagation();
         const photos = getPhotos();
-        if (photos.length <= 1) return;
-        const idx = photos.findIndex(p => p.id === currentLightboxPhotoId);
-        const nextIdx = (idx + 1) % photos.length;
+        if (photos.length <= 1 || !currentLightboxPhotoId) return;
+        const currentIdx = photos.findIndex(p => p.id === currentLightboxPhotoId);
+        const nextIdx = (currentIdx + 1) % photos.length;
         openLightbox(photos[nextIdx].id, false);
       }
 
-      function prevPhoto(event) {
-        if (event) event.stopPropagation();
+      function prevPhoto(e) {
+        if (e) e.stopPropagation();
         const photos = getPhotos();
-        if (photos.length <= 1) return;
-        const idx = photos.findIndex(p => p.id === currentLightboxPhotoId);
-        const prevIdx = (idx - 1 + photos.length) % photos.length;
+        if (photos.length <= 1 || !currentLightboxPhotoId) return;
+        const currentIdx = photos.findIndex(p => p.id === currentLightboxPhotoId);
+        const prevIdx = (currentIdx - 1 + photos.length) % photos.length;
         openLightbox(photos[prevIdx].id, false);
       }
 
-      function restartSlideshowProgressBar() {
-        const bar = document.getElementById('slideshow-progress-bar');
-        const fill = document.getElementById('slideshow-progress-fill');
-        if (!bar || !fill) return;
-        bar.classList.add('active');
-        fill.style.transition = 'none';
-        fill.style.width = '0%';
-        void fill.offsetWidth;
-        fill.style.transition = `width ${SLIDESHOW_DELAY_MS}ms linear`;
-        fill.style.width = '100%';
+      function startSlideshow() {
+        const photos = getPhotos();
+        if (photos.length === 0) return App.toast('Belum ada foto untuk diputar.', 'error');
+        openLightbox(photos[0].id, true);
       }
 
       function playSlideshow() {
         const photos = getPhotos();
         if (photos.length <= 1) {
-          return App.toast('Tambahkan minimal 2 foto untuk memutar slideshow otomatis.');
+          App.toast('Minimal 2 foto diperlukan untuk slideshow otomatis.');
+          return;
         }
-        pauseSlideshow();
         isSlideshowPlaying = true;
         updateSlideshowButtonUI();
-        restartSlideshowProgressBar();
+        resetSlideshowProgress();
 
-        slideshowInterval = setInterval(() => {
+        if (slideshowTimer) clearInterval(slideshowTimer);
+        slideshowTimer = setInterval(() => {
           nextPhoto();
-        }, SLIDESHOW_DELAY_MS);
+        }, SLIDESHOW_DURATION_MS);
       }
 
       function pauseSlideshow() {
         isSlideshowPlaying = false;
-        if (slideshowInterval) {
-          clearInterval(slideshowInterval);
-          slideshowInterval = null;
-        }
+        if (slideshowTimer) clearInterval(slideshowTimer);
+        if (slideshowProgressTimer) clearInterval(slideshowProgressTimer);
+        slideshowTimer = null;
+        slideshowProgressTimer = null;
         const bar = document.getElementById('slideshow-progress-bar');
         const fill = document.getElementById('slideshow-progress-fill');
         if (bar) bar.classList.remove('active');
-        if (fill) {
-          fill.style.transition = 'none';
-          fill.style.width = '0%';
-        }
+        if (fill) fill.style.width = '0%';
         updateSlideshowButtonUI();
       }
 
-      function toggleSlideshowPlay(event) {
-        if (event) event.stopPropagation();
+      function toggleSlideshowPlay(e) {
+        if (e) e.stopPropagation();
         if (isSlideshowPlaying) {
           pauseSlideshow();
         } else {
@@ -3419,12 +3433,28 @@
         }
       }
 
+      function resetSlideshowProgress() {
+        const bar = document.getElementById('slideshow-progress-bar');
+        const fill = document.getElementById('slideshow-progress-fill');
+        if (!bar || !fill) return;
+        bar.classList.add('active');
+        if (slideshowProgressTimer) clearInterval(slideshowProgressTimer);
+
+        const startTime = Date.now();
+        fill.style.width = '0%';
+        slideshowProgressTimer = setInterval(() => {
+          const elapsed = Date.now() - startTime;
+          const pct = Math.min(100, (elapsed / SLIDESHOW_DURATION_MS) * 100);
+          fill.style.width = `${pct}%`;
+        }, 40);
+      }
+
       function updateSlideshowButtonUI() {
         const btn = document.getElementById('lightbox-play-btn');
         if (!btn) return;
         if (isSlideshowPlaying) {
           btn.className = 'btn btn-orange btn-sm';
-          btn.innerHTML = `<i class="ph-bold ph-pause"></i> <span>Pause</span>`;
+          btn.innerHTML = `<i class="ph-bold ph-pause"></i> <span>Pause Slideshow</span>`;
         } else {
           btn.className = 'btn btn-dark btn-sm';
           btn.innerHTML = `<i class="ph-bold ph-play"></i> <span>Play Slideshow</span>`;
@@ -3439,10 +3469,6 @@
         }
       }
 
-      function isLightboxOpen() {
-        return currentLightboxPhotoId !== null;
-      }
-
       return {
         saveLocalPhoto,
         toggleLike,
@@ -3451,13 +3477,12 @@
         executeDelete,
         refresh,
         downloadAllZip,
-        startSlideshow,
         openLightbox,
         nextPhoto,
         prevPhoto,
+        startSlideshow,
         toggleSlideshowPlay,
-        closeLightbox,
-        isLightboxOpen
+        closeLightbox
       };
     })();
 
@@ -3474,21 +3499,22 @@
         CaptureModule.syncSlotCount(FrameModule.getActiveFrame().count);
         EventConfigModule.renderCustomizerPreview();
 
-        // Keyboard shortcuts untuk Slideshow & Lightbox (Panah Kiri, Panah Kanan, Spasi, Esc)
+        // Navigasi keyboard untuk lightbox / slideshow (Prev, Next, Esc)
         window.addEventListener('keydown', (e) => {
-          if (!GalleryModule.isLightboxOpen()) return;
-          if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            GalleryModule.nextPhoto();
-          } else if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            GalleryModule.prevPhoto();
-          } else if (e.key === ' ') {
-            e.preventDefault();
-            GalleryModule.toggleSlideshowPlay();
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            GalleryModule.closeLightbox();
+          const lightbox = document.getElementById('lightbox-modal');
+          const delModal = document.getElementById('delete-confirm-modal');
+          if (delModal && delModal.classList.contains('active')) {
+            if (e.key === 'Escape') GalleryModule.closeDeleteConfirm();
+            return;
+          }
+          if (lightbox && lightbox.classList.contains('active')) {
+            if (e.key === 'ArrowRight') GalleryModule.nextPhoto();
+            else if (e.key === 'ArrowLeft') GalleryModule.prevPhoto();
+            else if (e.key === 'Escape') GalleryModule.closeLightbox();
+            else if (e.key === ' ') {
+              e.preventDefault();
+              GalleryModule.toggleSlideshowPlay();
+            }
           }
         });
 
